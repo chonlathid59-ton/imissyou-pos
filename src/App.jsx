@@ -49,7 +49,10 @@ const DEFAULT_MENU = [
 ];
 
 const DEFAULT_STOCK = [
-  { id: "i1", name: "เมล็ดกาแฟ", unit: "กรัม", current: 2000, min: 500, leadTime: 3, costPerUnit: 1.2 },
+  { id: "i1", name: "เมล็ดกาแฟ คั่วอ่อน", unit: "กรัม", current: 500, min: 200, leadTime: 3, costPerUnit: 1.5 },
+  { id: "i24", name: "เมล็ดกาแฟ คั่วกลาง", unit: "กรัม", current: 1000, min: 300, leadTime: 3, costPerUnit: 1.2 },
+  { id: "i25", name: "เมล็ดกาแฟ คั่วเข้ม", unit: "กรัม", current: 1000, min: 300, leadTime: 3, costPerUnit: 1.2 },
+  { id: "i26", name: "เมล็ดกาแฟ เอธิโอเปีย", unit: "กรัม", current: 500, min: 150, leadTime: 10, costPerUnit: 3.5 },
   { id: "i2", name: "นมสด", unit: "มล.", current: 5000, min: 2000, leadTime: 1, costPerUnit: 0.05 },
   { id: "i3", name: "น้ำตาล", unit: "กรัม", current: 3000, min: 1000, leadTime: 2, costPerUnit: 0.03 },
   { id: "i4", name: "น้ำแข็ง", unit: "กก.", current: 20, min: 5, leadTime: 1, costPerUnit: 8 },
@@ -75,13 +78,20 @@ const DEFAULT_STOCK = [
 ];
 
 const DEFAULT_RECIPES = {
-  m1: [{ id: "i1", amt: 18 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
-  m2: [{ id: "i1", amt: 18 }, { id: "i9", amt: 15 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
-  m3: [{ id: "i1", amt: 18 }, { id: "i22", amt: 1 }],
-  m6: [{ id: "i1", amt: 18 }, { id: "i2", amt: 150 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
-  m7: [{ id: "i1", amt: 18 }, { id: "i2", amt: 120 }, { id: "i6", amt: 15 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
-  m8: [{ id: "i1", amt: 18 }, { id: "i2", amt: 100 }, { id: "i22", amt: 1 }],
-  m9: [{ id: "i1", amt: 18 }, { id: "i2", amt: 120 }, { id: "i10", amt: 20 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
+  // เมนูที่เลือกคั่วได้ ใช้ id="bean" เป็น placeholder (ระบบแปลงเป็น i1/i24/i25 ตามที่เลือก)
+  m1: [{ id: "bean", amt: 18 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
+  m2: [{ id: "bean", amt: 18 }, { id: "i9", amt: 15 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
+  m4: [{ id: "bean", amt: 18 }, { id: "i14", amt: 20 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
+  m5: [{ id: "bean", amt: 18 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
+  m6: [{ id: "bean", amt: 18 }, { id: "i2", amt: 150 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
+  // เมนูกาแฟอื่น ๆ ใช้เมล็ดคั่วกลาง (i24) เป็น default
+  m3: [{ id: "i24", amt: 18 }, { id: "i22", amt: 1 }],
+  m7: [{ id: "i24", amt: 18 }, { id: "i2", amt: 120 }, { id: "i6", amt: 15 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
+  m8: [{ id: "i24", amt: 18 }, { id: "i2", amt: 100 }, { id: "i22", amt: 1 }],
+  m9: [{ id: "i24", amt: 18 }, { id: "i2", amt: 120 }, { id: "i10", amt: 20 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
+  // เอธิโอเปีย ใช้เมล็ดเฉพาะ (i26)
+  m20: [{ id: "i26", amt: 18 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
+  // เมนูอื่น ๆ ที่ไม่มีเมล็ดกาแฟ
   m10: [{ id: "i6", amt: 20 }, { id: "i2", amt: 150 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
   m11: [{ id: "i7", amt: 15 }, { id: "i2", amt: 100 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
   m12: [{ id: "i8", amt: 15 }, { id: "i2", amt: 150 }, { id: "i4", amt: 0.2 }, { id: "i22", amt: 1 }, { id: "i23", amt: 1 }],
@@ -105,6 +115,13 @@ const ROAST_LEVELS = [
   { value: "dark", label: "คั่วเข้ม", extraPrice: 0 },
 ];
 const ROASTABLE_MENUS = new Set(["m1", "m2", "m4", "m5", "m6"]);
+const ROAST_TO_INGREDIENT = {
+  light: "i1",      // เมล็ดกาแฟ คั่วอ่อน
+  medium: "i24",    // เมล็ดกาแฟ คั่วกลาง
+  dark: "i25",      // เมล็ดกาแฟ คั่วเข้ม
+};
+const ETHIOPIA_BEAN_ID = "i26";
+const ETHIOPIA_MENU_ID = "m20";
 const getRoastLabel = (v) => ROAST_LEVELS.find(r => r.value === v)?.label || "";
 const getRoastExtra = (v) => ROAST_LEVELS.find(r => r.value === v)?.extraPrice || 0;
 
@@ -371,22 +388,36 @@ function POSView({ menu, stock, recipes, setStock, sales, setSales, shopInfo, sh
   const categories = ["ทั้งหมด", ...new Set(menu.map(m => m.category))];
   const filteredMenu = category === "ทั้งหมด" ? menu : menu.filter(m => m.category === category);
 
-  const canMake = (menuId, qty = 1) => {
+  // แปลงสูตรโดยแทนที่ "bean" placeholder ด้วย ingredient id จริงตาม roast level
+  const resolveRecipe = (menuId, roast) => {
     const recipe = recipes[menuId];
+    if (!recipe) return [];
+    if (!ROASTABLE_MENUS.has(menuId) || !roast) return recipe;
+    const beanId = ROAST_TO_INGREDIENT[roast];
+    if (!beanId) return recipe;
+    return recipe.map(r => r.id === "bean" ? { ...r, id: beanId } : r);
+  };
+
+  const canMake = (menuId, qty = 1, roast = null) => {
+    const effectiveRoast = roast || (ROASTABLE_MENUS.has(menuId) ? "medium" : null);
+    const recipe = resolveRecipe(menuId, effectiveRoast);
     if (!recipe || recipe.length === 0) return true;
+    // ถ้ายังมี bean placeholder หลัง resolve แสดงว่าระบบไม่รู้ roast → ถือว่าทำได้
     return recipe.every(r => {
+      if (r.id === "bean") return true;
       const item = stock.find(s => s.id === r.id);
       return item && item.current >= r.amt * qty;
     });
   };
 
   const addToCart = (item) => {
-    if (!canMake(item.id, 1)) {
-      showToast(`วัตถุดิบไม่พอสำหรับ "${item.name}"`, "error");
-      return;
-    }
     const hasRoast = ROASTABLE_MENUS.has(item.id);
     const defaultRoast = hasRoast ? "medium" : null;
+    if (!canMake(item.id, 1, defaultRoast)) {
+      const beanName = hasRoast ? `${getRoastLabel(defaultRoast)}` : "";
+      showToast(`วัตถุดิบไม่พอสำหรับ "${item.name}"${beanName ? ` (${beanName})` : ""}`, "error");
+      return;
+    }
     const existing = cart.find(c => c.id === item.id && c.blended === false && c.roast === defaultRoast);
     if (existing) {
       setCart(cart.map(c => c.id === item.id && !c.blended && c.roast === defaultRoast ? { ...c, qty: c.qty + 1 } : c));
@@ -402,10 +433,19 @@ function POSView({ menu, stock, recipes, setStock, sales, setSales, shopInfo, sh
 
   const checkout = () => {
     if (cart.length === 0) return;
+    // ตรวจสต๊อกอีกครั้งก่อนตัด (เผื่อผู้ใช้เปลี่ยนจำนวน/roast จนไม่พอ)
+    for (const item of cart) {
+      if (!canMake(item.id, item.qty, item.roast)) {
+        const beanName = item.roast ? ` (${getRoastLabel(item.roast)})` : "";
+        showToast(`วัตถุดิบไม่พอสำหรับ "${item.name}"${beanName} × ${item.qty}`, "error");
+        return;
+      }
+    }
     const newStock = [...stock];
     for (const item of cart) {
-      const recipe = recipes[item.id] || [];
+      const recipe = resolveRecipe(item.id, item.roast);
       for (const r of recipe) {
+        if (r.id === "bean") continue; // skip unresolved placeholder
         const idx = newStock.findIndex(s => s.id === r.id);
         if (idx >= 0) newStock[idx] = { ...newStock[idx], current: Math.max(0, newStock[idx].current - r.amt * item.qty) };
       }
@@ -755,6 +795,11 @@ function RecipeView({ menu, stock, recipes, setRecipes, showToast }) {
   };
 
   const calcCost = () => currentRecipe.reduce((sum, r) => {
+    // ถ้าเป็น placeholder "bean" ใช้ต้นทุนของเมล็ดคั่วกลาง (default)
+    if (r.id === "bean") {
+      const item = stock.find(s => s.id === ROAST_TO_INGREDIENT.medium);
+      return sum + (item ? item.costPerUnit * r.amt : 0);
+    }
     const item = stock.find(s => s.id === r.id);
     return sum + (item ? item.costPerUnit * r.amt : 0);
   }, 0);
@@ -762,6 +807,7 @@ function RecipeView({ menu, stock, recipes, setRecipes, showToast }) {
   const realCost = calcCost();
   const profit = menuItem ? menuItem.price - realCost : 0;
   const margin = menuItem ? (profit / menuItem.price * 100).toFixed(0) : 0;
+  const isRoastable = menuItem && ROASTABLE_MENUS.has(menuItem.id);
 
   return (
     <div className="grid md:grid-cols-3 gap-5" style={{ gridTemplateColumns: "1fr" }}>
@@ -792,6 +838,12 @@ function RecipeView({ menu, stock, recipes, setRecipes, showToast }) {
                 <div>ต้นทุนจริง: <strong style={{ color: "var(--brown)" }}>฿{realCost.toFixed(2)}</strong></div>
                 <div>กำไร: <strong style={{ color: "var(--success)" }}>฿{profit.toFixed(2)} ({margin}%)</strong></div>
               </div>
+              {isRoastable && (
+                <div style={{ marginTop: 10, padding: 10, background: "var(--bg)", borderRadius: 6, fontSize: 12, color: "var(--text-muted)" }}>
+                  💡 เมนูนี้เลือกระดับคั่วได้ — ใช้ <strong>เมล็ดกาแฟ (ตามคั่ว)</strong> เป็นช่องพิเศษ
+                  ที่จะตัดสต๊อกจากถังตามระดับคั่วที่ลูกค้าเลือก (คั่วอ่อน/กลาง/เข้ม)
+                </div>
+              )}
             </div>
 
             <h4 style={{ fontWeight: 600, marginBottom: 10 }}>วัตถุดิบที่ใช้</h4>
@@ -800,14 +852,28 @@ function RecipeView({ menu, stock, recipes, setRecipes, showToast }) {
             )}
             <div className="space-y-2 mb-4">
               {currentRecipe.map((r, idx) => {
-                const item = stock.find(s => s.id === r.id);
+                const isBeanPlaceholder = r.id === "bean";
+                const item = isBeanPlaceholder ? null : stock.find(s => s.id === r.id);
+                const unit = isBeanPlaceholder ? "กรัม" : item?.unit;
                 return (
-                  <div key={idx} className="flex gap-2 items-center" style={{ background: "var(--bg)", padding: 8, borderRadius: 6 }}>
-                    <select value={r.id} onChange={e => updateIngredient(idx, { id: e.target.value })} style={{ flex: 1 }}>
-                      {stock.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+                  <div key={idx} className="flex gap-2 items-center" style={{
+                    background: isBeanPlaceholder ? "rgba(212,160,86,0.12)" : "var(--bg)",
+                    padding: 8, borderRadius: 6,
+                    border: isBeanPlaceholder ? "1px dashed var(--accent)" : "none"
+                  }}>
+                    {isBeanPlaceholder ? (
+                      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                        <Coffee size={14} style={{ color: "var(--brown)" }} />
+                        <span style={{ fontWeight: 500 }}>เมล็ดกาแฟ (ตามคั่ว)</span>
+                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>— ตัดจากถังตามระดับคั่ว</span>
+                      </div>
+                    ) : (
+                      <select value={r.id} onChange={e => updateIngredient(idx, { id: e.target.value })} style={{ flex: 1 }}>
+                        {stock.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    )}
                     <input type="number" step="0.1" value={r.amt} onChange={e => updateIngredient(idx, { amt: +e.target.value })} style={{ width: 80 }} />
-                    <span style={{ fontSize: 13, color: "var(--text-muted)", minWidth: 40 }}>{item?.unit}</span>
+                    <span style={{ fontSize: 13, color: "var(--text-muted)", minWidth: 40 }}>{unit}</span>
                     <button onClick={() => removeIngredient(idx)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)" }}>
                       <Trash2 size={16} />
                     </button>
@@ -815,11 +881,17 @@ function RecipeView({ menu, stock, recipes, setRecipes, showToast }) {
                 );
               })}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button onClick={addIngredient} className="btn-ghost">
                 <Plus size={14} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
                 เพิ่มวัตถุดิบ
               </button>
+              {isRoastable && !currentRecipe.some(r => r.id === "bean") && (
+                <button onClick={() => setRecipes({ ...recipes, [selected]: [...currentRecipe, { id: "bean", amt: 18 }] })} className="btn-ghost">
+                  <Coffee size={14} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
+                  เพิ่มเมล็ดตามคั่ว
+                </button>
+              )}
               <button onClick={save} className="btn-primary">บันทึกสูตร</button>
             </div>
           </>
