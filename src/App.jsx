@@ -26,6 +26,7 @@ const DEFAULT_MENU = [
   { id: "m17", name: "ชามะนาว", category: "กาแฟสด", price: 50, cost: 10 },
   { id: "m18", name: "ชาพีช", category: "กาแฟสด", price: 50, cost: 14 },
   { id: "m19", name: "ชาดำเย็น", category: "กาแฟสด", price: 50, cost: 8 },
+  { id: "m20", name: "อเมริกาโน่เอธิโอเปีย", category: "กาแฟสด", price: 65, cost: 25 },
   { id: "s1", name: "พีชโซดา", category: "โซดา", price: 50, cost: 14 },
   { id: "s2", name: "แดงโซดา", category: "โซดา", price: 50, cost: 10 },
   { id: "s3", name: "แดงมะนาวโซดา", category: "โซดา", price: 50, cost: 12 },
@@ -98,6 +99,14 @@ const DEFAULT_RECIPES = {
 };
 
 const SWEETNESS_LEVELS = [0, 25, 50, 100];
+const ROAST_LEVELS = [
+  { value: "light", label: "คั่วอ่อน", extraPrice: 5 },
+  { value: "medium", label: "คั่วกลาง", extraPrice: 0 },
+  { value: "dark", label: "คั่วเข้ม", extraPrice: 0 },
+];
+const ROASTABLE_MENUS = new Set(["m1", "m2", "m4", "m5", "m6"]);
+const getRoastLabel = (v) => ROAST_LEVELS.find(r => r.value === v)?.label || "";
+const getRoastExtra = (v) => ROAST_LEVELS.find(r => r.value === v)?.extraPrice || 0;
 
 // ========== STORAGE (localStorage) ==========
 const KEY_PREFIX = "imissyou_";
@@ -376,17 +385,20 @@ function POSView({ menu, stock, recipes, setStock, sales, setSales, shopInfo, sh
       showToast(`วัตถุดิบไม่พอสำหรับ "${item.name}"`, "error");
       return;
     }
-    const existing = cart.find(c => c.id === item.id && c.blended === false);
+    const hasRoast = ROASTABLE_MENUS.has(item.id);
+    const defaultRoast = hasRoast ? "medium" : null;
+    const existing = cart.find(c => c.id === item.id && c.blended === false && c.roast === defaultRoast);
     if (existing) {
-      setCart(cart.map(c => c.id === item.id && !c.blended ? { ...c, qty: c.qty + 1 } : c));
+      setCart(cart.map(c => c.id === item.id && !c.blended && c.roast === defaultRoast ? { ...c, qty: c.qty + 1 } : c));
     } else {
-      setCart([...cart, { ...item, qty: 1, sweetness: 100, blended: false, cartKey: Date.now() + Math.random() }]);
+      setCart([...cart, { ...item, qty: 1, sweetness: 100, blended: false, roast: defaultRoast, cartKey: Date.now() + Math.random() }]);
     }
   };
 
   const updateCartItem = (key, updates) => setCart(cart.map(c => c.cartKey === key ? { ...c, ...updates } : c));
   const removeFromCart = (key) => setCart(cart.filter(c => c.cartKey !== key));
-  const subtotal = cart.reduce((sum, c) => sum + (c.price + (c.blended ? 10 : 0)) * c.qty, 0);
+  const calcLinePrice = (c) => (c.price + (c.blended ? 10 : 0) + getRoastExtra(c.roast)) * c.qty;
+  const subtotal = cart.reduce((sum, c) => sum + calcLinePrice(c), 0);
 
   const checkout = () => {
     if (cart.length === 0) return;
@@ -406,8 +418,8 @@ function POSView({ menu, stock, recipes, setStock, sales, setSales, shopInfo, sh
       timestamp: new Date().toISOString(),
       items: cart.map(c => ({
         id: c.id, name: c.name, price: c.price, cost: c.cost, qty: c.qty,
-        sweetness: c.sweetness, blended: c.blended,
-        lineTotal: (c.price + (c.blended ? 10 : 0)) * c.qty,
+        sweetness: c.sweetness, blended: c.blended, roast: c.roast || null,
+        lineTotal: calcLinePrice(c),
         lineCost: c.cost * c.qty,
       })),
       total: subtotal,
@@ -474,7 +486,7 @@ function POSView({ menu, stock, recipes, setStock, sales, setSales, shopInfo, sh
                     <button className="btn-ghost" style={{ padding: "2px 8px" }} onClick={() => updateCartItem(c.cartKey, { qty: c.qty + 1 })}>
                       <Plus size={12} />
                     </button>
-                    <span style={{ marginLeft: "auto", fontWeight: 600 }}>฿{(c.price + (c.blended ? 10 : 0)) * c.qty}</span>
+                    <span style={{ marginLeft: "auto", fontWeight: 600 }}>฿{calcLinePrice(c)}</span>
                   </div>
                   <div className="flex gap-3 flex-wrap" style={{ fontSize: 12 }}>
                     <label>หวาน:&nbsp;
@@ -482,6 +494,17 @@ function POSView({ menu, stock, recipes, setStock, sales, setSales, shopInfo, sh
                         {SWEETNESS_LEVELS.map(s => <option key={s} value={s}>{s}%</option>)}
                       </select>
                     </label>
+                    {c.roast && (
+                      <label>คั่ว:&nbsp;
+                        <select value={c.roast} onChange={e => updateCartItem(c.cartKey, { roast: e.target.value })} style={{ padding: "2px 6px", fontSize: 12 }}>
+                          {ROAST_LEVELS.map(r => (
+                            <option key={r.value} value={r.value}>
+                              {r.label}{r.extraPrice > 0 ? ` +${r.extraPrice}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <input type="checkbox" checked={c.blended} onChange={e => updateCartItem(c.cartKey, { blended: e.target.checked })} />
                       ปั่น (+10)
@@ -527,7 +550,7 @@ function ReceiptModal({ receipt, shopInfo, onClose }) {
                 <span>฿{it.lineTotal}</span>
               </div>
               <div style={{ fontSize: 11, color: "var(--text-muted)", paddingLeft: 8 }}>
-                หวาน {it.sweetness}%{it.blended ? " • ปั่น +10" : ""}
+                หวาน {it.sweetness}%{it.roast ? ` • ${getRoastLabel(it.roast)}` : ""}{it.blended ? " • ปั่น +10" : ""}
               </div>
             </div>
           ))}
