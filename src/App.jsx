@@ -368,7 +368,7 @@ export default function App() {
         {tab === "stock" && <StockView stock={stock} setStock={setStock} showToast={showToast} />}
         {tab === "recipe" && <RecipeView menu={menu} stock={stock} recipes={recipes} setRecipes={setRecipes} showToast={showToast} />}
         {tab === "report" && <ReportView sales={sales} menu={menu} />}
-        {tab === "settings" && <SettingsView menu={menu} setMenu={setMenu} sales={sales} setSales={setSales} shopInfo={shopInfo} setShopInfo={setShopInfo} showToast={showToast} />}
+        {tab === "settings" && <SettingsView menu={menu} setMenu={setMenu} sales={sales} setSales={setSales} shopInfo={shopInfo} setShopInfo={setShopInfo} setStock={setStock} setRecipes={setRecipes} showToast={showToast} />}
       </main>
 
       {toast && (
@@ -1105,7 +1105,7 @@ function KPI({ label, value, icon: Icon, color = "brown" }) {
   );
 }
 
-function SettingsView({ menu, setMenu, sales, setSales, shopInfo, setShopInfo, showToast }) {
+function SettingsView({ menu, setMenu, sales, setSales, shopInfo, setShopInfo, setStock, setRecipes, showToast }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
   const [newM, setNewM] = useState({ name: "", category: "กาแฟสด", price: 50, cost: 15 });
@@ -1210,6 +1210,20 @@ function SettingsView({ menu, setMenu, sales, setSales, shopInfo, setShopInfo, s
     showToast("ล้างแล้ว");
   };
 
+  const resetAll = () => {
+    if (!confirm("⚠️ รีเซ็ตทุกอย่างเป็นค่าเริ่มต้น?\n\nจะลบ:\n- เมนูทั้งหมด (กลับเป็นเมนูเริ่มต้น)\n- สต๊อกทั้งหมด (กลับเป็นค่าเริ่มต้น)\n- สูตรทั้งหมด (กลับเป็นสูตรเริ่มต้น)\n- ประวัติการขายทั้งหมด\n\nแนะนำให้ Export ข้อมูลก่อน!\n\nยกเลิกไม่ได้หลังกด OK")) return;
+    if (!confirm("ยืนยันอีกครั้ง: ต้องการรีเซ็ตทั้งหมดใช่มั้ย?")) return;
+    setMenu(DEFAULT_MENU);
+    setStock(DEFAULT_STOCK);
+    setRecipes(DEFAULT_RECIPES);
+    setSales([]);
+    saveData("menu", DEFAULT_MENU);
+    saveData("stock", DEFAULT_STOCK);
+    saveData("recipes", DEFAULT_RECIPES);
+    saveData("sales", []);
+    showToast("รีเซ็ตเสร็จแล้ว! ข้อมูลร้าน/QR ยังอยู่");
+  };
+
   return (
     <div className="space-y-5">
       <div className="card p-5">
@@ -1285,6 +1299,18 @@ function SettingsView({ menu, setMenu, sales, setSales, shopInfo, setShopInfo, s
             <input type="file" accept=".json" onChange={importData} style={{ display: "none" }} />
           </label>
           <button onClick={clearSales} className="btn-ghost" style={{ color: "var(--danger)" }}>ล้างประวัติการขาย</button>
+        </div>
+        <div style={{ marginTop: 16, padding: 14, background: "rgba(198,93,58,0.08)", borderRadius: 8, border: "1px solid rgba(198,93,58,0.25)" }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: "var(--danger)", marginBottom: 6 }}>
+            ⚠️ รีเซ็ตทุกอย่าง (ใช้เมื่อระบบขึ้น default ใหม่จากการอัปเดต)
+          </div>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>
+            กรณีอัปเดตระบบแล้วเมนู/สต๊อกเพี้ยน กดปุ่มนี้จะคืนค่าเริ่มต้นทั้งหมด (แนะนำ Export ข้อมูลเก็บไว้ก่อน)
+          </p>
+          <button onClick={resetAll} className="btn-ghost" style={{ color: "var(--danger)", borderColor: "var(--danger)" }}>
+            <Trash2 size={14} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
+            รีเซ็ตเป็นค่าเริ่มต้น
+          </button>
         </div>
       </div>
 
