@@ -112,12 +112,20 @@ const saveData = (key, val) => {
 };
 
 // ========== MAIN APP ==========
+const DEFAULT_SHOP_INFO = {
+  shopName: "I Miss You",
+  qrImage: "", // base64 data URL
+  qrNote: "สแกนเพื่อชำระเงิน",
+  footerNote: "ขอบคุณที่อุดหนุนนะคะ 💛",
+};
+
 export default function App() {
   const [tab, setTab] = useState("pos");
   const [menu, setMenu] = useState([]);
   const [stock, setStock] = useState([]);
   const [recipes, setRecipes] = useState({});
   const [sales, setSales] = useState([]);
+  const [shopInfo, setShopInfo] = useState(DEFAULT_SHOP_INFO);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
@@ -126,6 +134,7 @@ export default function App() {
     setStock(loadData("stock", DEFAULT_STOCK));
     setRecipes(loadData("recipes", DEFAULT_RECIPES));
     setSales(loadData("sales", []));
+    setShopInfo(loadData("shopInfo", DEFAULT_SHOP_INFO));
     setLoading(false);
   }, []);
 
@@ -329,11 +338,11 @@ export default function App() {
       </header>
 
       <main style={{ maxWidth: 1280, margin: "0 auto", padding: "24px" }}>
-        {tab === "pos" && <POSView menu={menu} stock={stock} recipes={recipes} setStock={setStock} sales={sales} setSales={setSales} showToast={showToast} />}
+        {tab === "pos" && <POSView menu={menu} stock={stock} recipes={recipes} setStock={setStock} sales={sales} setSales={setSales} shopInfo={shopInfo} showToast={showToast} />}
         {tab === "stock" && <StockView stock={stock} setStock={setStock} showToast={showToast} />}
         {tab === "recipe" && <RecipeView menu={menu} stock={stock} recipes={recipes} setRecipes={setRecipes} showToast={showToast} />}
         {tab === "report" && <ReportView sales={sales} menu={menu} />}
-        {tab === "settings" && <SettingsView menu={menu} setMenu={setMenu} sales={sales} setSales={setSales} showToast={showToast} />}
+        {tab === "settings" && <SettingsView menu={menu} setMenu={setMenu} sales={sales} setSales={setSales} shopInfo={shopInfo} setShopInfo={setShopInfo} showToast={showToast} />}
       </main>
 
       {toast && (
@@ -345,7 +354,7 @@ export default function App() {
   );
 }
 
-function POSView({ menu, stock, recipes, setStock, sales, setSales, showToast }) {
+function POSView({ menu, stock, recipes, setStock, sales, setSales, shopInfo, showToast }) {
   const [cart, setCart] = useState([]);
   const [category, setCategory] = useState("ทั้งหมด");
   const [receipt, setReceipt] = useState(null);
@@ -493,19 +502,20 @@ function POSView({ menu, stock, recipes, setStock, sales, setSales, showToast })
         )}
       </div>
 
-      {receipt && <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />}
+      {receipt && <ReceiptModal receipt={receipt} shopInfo={shopInfo} onClose={() => setReceipt(null)} />}
     </div>
   );
 }
 
-function ReceiptModal({ receipt, onClose }) {
+function ReceiptModal({ receipt, shopInfo, onClose }) {
   const print = () => window.print();
+  const hasQR = shopInfo?.qrImage && shopInfo.qrImage.length > 0;
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(61,40,23,0.6)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div className="card p-6" style={{ maxWidth: 360, width: "100%" }} id="receipt">
+    <div style={{ position: "fixed", inset: 0, background: "rgba(61,40,23,0.6)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, overflowY: "auto" }}>
+      <div className="card p-6" style={{ maxWidth: 360, width: "100%", maxHeight: "95vh", overflowY: "auto" }} id="receipt">
         <div className="text-center mb-4">
           <div className="stars mb-2"></div>
-          <h2 className="font-neon" style={{ fontSize: 32, color: "var(--brown)", textShadow: "0 0 4px rgba(212,160,86,0.4)", margin: 0 }}>I Miss You</h2>
+          <h2 className="font-neon" style={{ fontSize: 32, color: "var(--brown)", textShadow: "0 0 4px rgba(212,160,86,0.4)", margin: 0 }}>{shopInfo?.shopName || "I Miss You"}</h2>
           <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "8px 0 0 0" }}>{new Date(receipt.timestamp).toLocaleString("th-TH")}</p>
           <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "2px 0 0 0" }}>#{receipt.id.slice(-6)}</p>
         </div>
@@ -526,7 +536,21 @@ function ReceiptModal({ receipt, onClose }) {
           <span>รวม</span>
           <span style={{ color: "var(--brown)" }}>฿{receipt.total}</span>
         </div>
-        <p className="text-center" style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 16 }}>ขอบคุณที่อุดหนุนนะคะ 💛</p>
+        {hasQR && (
+          <div style={{ borderTop: "1px dashed var(--border)", paddingTop: 12, marginBottom: 12, textAlign: "center" }}>
+            <p style={{ fontSize: 12, fontWeight: 500, margin: "0 0 8px 0", color: "var(--brown)" }}>
+              {shopInfo.qrNote || "สแกนเพื่อชำระเงิน"}
+            </p>
+            <img src={shopInfo.qrImage} alt="PromptPay QR"
+              style={{ width: 180, height: 180, objectFit: "contain", borderRadius: 6, border: "1px solid var(--border)" }} />
+            <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "6px 0 0 0" }}>
+              ยอด ฿{receipt.total} (กรอกยอดในแอปธนาคาร)
+            </p>
+          </div>
+        )}
+        <p className="text-center" style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 16 }}>
+          {shopInfo?.footerNote || "ขอบคุณที่อุดหนุนนะคะ 💛"}
+        </p>
         <div className="flex gap-2 no-print">
           <button onClick={print} className="btn-primary" style={{ flex: 1 }}>
             <Printer size={16} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
@@ -535,7 +559,7 @@ function ReceiptModal({ receipt, onClose }) {
           <button onClick={onClose} className="btn-ghost" style={{ flex: 1 }}>ปิด</button>
         </div>
       </div>
-      <style>{`@media print { body * { visibility: hidden; } #receipt, #receipt * { visibility: visible; } #receipt { position: absolute; left: 0; top: 0; width: 100%; } .no-print { display: none !important; } }`}</style>
+      <style>{`@media print { body * { visibility: hidden; } #receipt, #receipt * { visibility: visible; } #receipt { position: absolute; left: 0; top: 0; width: 100%; max-height: none !important; overflow: visible !important; } .no-print { display: none !important; } }`}</style>
     </div>
   );
 }
@@ -986,10 +1010,39 @@ function KPI({ label, value, icon: Icon, color = "brown" }) {
   );
 }
 
-function SettingsView({ menu, setMenu, sales, setSales, showToast }) {
+function SettingsView({ menu, setMenu, sales, setSales, shopInfo, setShopInfo, showToast }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
   const [newM, setNewM] = useState({ name: "", category: "กาแฟสด", price: 50, cost: 15 });
+  const [shopDraft, setShopDraft] = useState(shopInfo);
+
+  useEffect(() => { setShopDraft(shopInfo); }, [shopInfo]);
+
+  const handleQRUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showToast("รูปใหญ่เกินไป (เกิน 2MB) กรุณาเลือกรูปเล็กลง", "error");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      showToast("กรุณาเลือกไฟล์รูปภาพ", "error");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      setShopDraft({ ...shopDraft, qrImage: evt.target.result });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeQR = () => setShopDraft({ ...shopDraft, qrImage: "" });
+
+  const saveShopInfo = () => {
+    setShopInfo(shopDraft);
+    saveData("shopInfo", shopDraft);
+    showToast("บันทึกข้อมูลร้านแล้ว");
+  };
 
   const addMenu = () => {
     if (!newM.name) return;
@@ -1024,6 +1077,7 @@ function SettingsView({ menu, setMenu, sales, setSales, showToast }) {
       stock: loadData("stock", []),
       recipes: loadData("recipes", {}),
       sales: loadData("sales", []),
+      shopInfo: loadData("shopInfo", DEFAULT_SHOP_INFO),
       exportedAt: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -1047,6 +1101,7 @@ function SettingsView({ menu, setMenu, sales, setSales, showToast }) {
         if (data.stock) saveData("stock", data.stock);
         if (data.recipes) saveData("recipes", data.recipes);
         if (data.sales) { setSales(data.sales); saveData("sales", data.sales); }
+        if (data.shopInfo) { setShopInfo(data.shopInfo); saveData("shopInfo", data.shopInfo); }
         showToast("นำเข้าสำเร็จ! กรุณารีเฟรช");
       } catch { showToast("ไฟล์ไม่ถูกต้อง", "error"); }
     };
@@ -1062,6 +1117,65 @@ function SettingsView({ menu, setMenu, sales, setSales, showToast }) {
 
   return (
     <div className="space-y-5">
+      <div className="card p-5">
+        <h3 className="font-serif mb-3" style={{ fontSize: 20, margin: "0 0 4px 0" }}>ข้อมูลร้าน & QR ชำระเงิน</h3>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
+          ชื่อร้านและ QR PromptPay จะแสดงบนใบเสร็จทุกใบ
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>ชื่อร้าน (แสดงบนใบเสร็จ)</label>
+            <input value={shopDraft.shopName || ""} onChange={e => setShopDraft({ ...shopDraft, shopName: e.target.value })}
+              placeholder="I Miss You" style={{ width: "100%" }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>ข้อความใต้ QR</label>
+            <input value={shopDraft.qrNote || ""} onChange={e => setShopDraft({ ...shopDraft, qrNote: e.target.value })}
+              placeholder="สแกนเพื่อชำระเงิน" style={{ width: "100%" }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>ข้อความท้ายใบเสร็จ</label>
+            <input value={shopDraft.footerNote || ""} onChange={e => setShopDraft({ ...shopDraft, footerNote: e.target.value })}
+              placeholder="ขอบคุณที่อุดหนุนนะคะ 💛" style={{ width: "100%" }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, color: "var(--text-muted)", display: "block", marginBottom: 8 }}>รูป QR PromptPay</label>
+            {shopDraft.qrImage ? (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+                <img src={shopDraft.qrImage} alt="QR Preview"
+                  style={{ width: 160, height: 160, objectFit: "contain", borderRadius: 8, border: "1px solid var(--border)", background: "white", padding: 4 }} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <label className="btn-ghost" style={{ cursor: "pointer", fontSize: 13 }}>
+                    <Upload size={14} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
+                    เปลี่ยนรูป
+                    <input type="file" accept="image/*" onChange={handleQRUpload} style={{ display: "none" }} />
+                  </label>
+                  <button onClick={removeQR} className="btn-ghost" style={{ fontSize: 13, color: "var(--danger)" }}>
+                    <Trash2 size={14} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
+                    ลบรูป
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: 20, border: "2px dashed var(--border)", borderRadius: 8, textAlign: "center", background: "var(--bg)" }}>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12 }}>ยังไม่ได้อัปโหลดรูป QR</p>
+                <label className="btn-primary" style={{ cursor: "pointer", display: "inline-block" }}>
+                  <Upload size={14} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
+                  อัปโหลดรูป QR
+                  <input type="file" accept="image/*" onChange={handleQRUpload} style={{ display: "none" }} />
+                </label>
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 10, margin: "10px 0 0 0" }}>
+                  รองรับ PNG, JPG • ขนาดไม่เกิน 2MB
+                </p>
+              </div>
+            )}
+          </div>
+          <button onClick={saveShopInfo} className="btn-primary" style={{ width: "100%" }}>
+            บันทึกข้อมูลร้าน
+          </button>
+        </div>
+      </div>
+
       <div className="card p-5">
         <h3 className="font-serif mb-3" style={{ fontSize: 20, margin: "0 0 12px 0" }}>สำรอง & นำเข้าข้อมูล</h3>
         <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12 }}>ดาวน์โหลดข้อมูลทั้งหมดเป็นไฟล์ .json เก็บไว้ หรือย้ายไปอุปกรณ์อื่น</p>
