@@ -163,6 +163,16 @@ const ETHIOPIA_BEAN_ID = "i26";
 const ETHIOPIA_MENU_ID = "m20";
 const getRoastLabel = (v) => ROAST_LEVELS.find(r => r.value === v)?.label || "";
 const getRoastExtra = (v) => ROAST_LEVELS.find(r => r.value === v)?.extraPrice || 0;
+// ระดับคั่วที่เคยขายจริงของแต่ละเมนู — ใช้แยกปุ่มในหน้า POS (ไม่กระทบข้อมูล/สูตร/บิลเดิม)
+const ROAST_SOLD_BY_MENU = {
+  m1: ["medium", "dark", "light"],
+  m2: ["medium", "dark"],
+  m4: ["medium", "dark"],
+  m5: ["medium", "dark"],
+  m6: ["medium", "dark", "light"],
+};
+const getSoldRoasts = (menuId) => ROAST_SOLD_BY_MENU[menuId] || ["medium", "dark", "light"];
+const getRoastShort = (v) => (v === "light" ? "อ่อน" : v === "dark" ? "เข้ม" : "กลาง");
 
 // ========== STORAGE (localStorage) ==========
 const KEY_PREFIX = "imissyou_";
@@ -306,6 +316,7 @@ export default function App() {
         .tab-btn.active { opacity: 1; border-bottom-color: var(--accent); }
         .tab-btn:hover { opacity: 0.9; }
         .menu-card {
+          position: relative;
           background: var(--bg-card);
           border: 1px solid var(--border);
           border-radius: 10px;
@@ -529,10 +540,55 @@ function POSView({ menu, stock, recipes, setStock, sales, setSales, shopInfo, sh
   const [note, setNote] = useState("");
   const [cartCollapsed, setCartCollapsed] = useState(false);
   const [cartBump, setCartBump] = useState(false);
+  const [sortByBest, setSortByBest] = useState(false);
   const cartIconRef = useRef(null);
 
   const categories = ["ทั้งหมด", ...new Set(menu.map(m => m.category))];
   const filteredMenu = category === "ทั้งหมด" ? menu : menu.filter(m => m.category === category);
+
+  // ===== ยอดขาย 30 วันล่าสุด (สำหรับเรียงเมนูขายดี) — นับจำนวนแก้วต่อ (เมนู+ระดับคั่ว) =====
+  const salesRank = useMemo(() => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const map = {};
+    sales.forEach(s => {
+      if (new Date(s.timestamp).getTime() < cutoff) return;
+      (s.items || []).forEach(it => {
+        const key = ROASTABLE_MENUS.has(it.id) && it.roast ? `${it.id}__${it.roast}` : it.id;
+        map[key] = (map[key] || 0) + (it.qty || 0);
+      });
+    });
+    return map;
+  }, [sales]);
+
+  // ===== แตกเมนูที่เลือกคั่วได้เป็นการ์ดแยกตามระดับคั่วที่เคยขายจริง =====
+  const displayCards = useMemo(() => {
+    const cards = [];
+    filteredMenu.forEach(m => {
+      if (ROASTABLE_MENUS.has(m.id)) {
+        getSoldRoasts(m.id).forEach(roast => {
+          cards.push({
+            cardKey: `${m.id}__${roast}`,
+            menu: m,
+            roast,
+            displayName: `${m.name} · ${getRoastShort(roast)}`,
+            price: m.price + getRoastExtra(roast),
+            sold: salesRank[`${m.id}__${roast}`] || 0,
+          });
+        });
+      } else {
+        cards.push({
+          cardKey: m.id,
+          menu: m,
+          roast: null,
+          displayName: m.name,
+          price: m.price,
+          sold: salesRank[m.id] || 0,
+        });
+      }
+    });
+    if (sortByBest) cards.sort((a, b) => b.sold - a.sold);
+    return cards;
+  }, [filteredMenu, salesRank, sortByBest]);
 
   // แปลงสูตรโดยแทนที่ "bean" placeholder ด้วย ingredient id จริงตาม roast level
   const resolveRecipe = (menuId, roast) => {
@@ -587,9 +643,9 @@ function POSView({ menu, stock, recipes, setStock, sales, setSales, shopInfo, sh
     setTimeout(() => setCartBump(false), 320);
   };
 
-  const addToCart = (item, evt) => {
+  const addToCart = (item, evt, roastOverride) => {
     const hasRoast = ROASTABLE_MENUS.has(item.id);
-    const defaultRoast = hasRoast ? "medium" : null;
+    const defaultRoast = hasRoast ? (roastOverride || "medium") : null;
     if (!canMake(item.id, 1, defaultRoast)) {
       const beanName = hasRoast ? `${getRoastLabel(defaultRoast)}` : "";
       showToast(`วัตถุดิบไม่พอสำหรับ "${item.name}"${beanName ? ` (${beanName})` : ""}`, "error");
@@ -823,26 +879,42 @@ function POSView({ menu, stock, recipes, setStock, sales, setSales, shopInfo, sh
       </div>
 
       {/* ===== Category buttons ===== */}
-      <div className="flex gap-2 mb-4 flex-wrap">
+      <div className="flex gap-2 mb-3 flex-wrap items-center">
         {categories.map(c => (
           <button key={c} onClick={() => setCategory(c)} className={category === c ? "btn-primary" : "btn-ghost"} style={{ fontSize: 14 }}>{c}</button>
         ))}
+        <button
+          onClick={() => setSortByBest(v => !v)}
+          className={sortByBest ? "btn-primary" : "btn-ghost"}
+          style={{ fontSize: 14, marginLeft: "auto" }}
+          title="เรียงเมนูตามยอดขาย 30 วันล่าสุด"
+        >
+          <TrendingUp size={14} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
+          {sortByBest ? "ขายดีก่อน ✓" : "เรียงขายดี"}
+        </button>
       </div>
 
       {/* ===== Menu grid ===== */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3" style={{ paddingBottom: 24 }}>
-        {filteredMenu.map(m => {
-          const available = canMake(m.id);
+        {displayCards.map(card => {
+          const m = card.menu;
+          const available = canMake(m.id, 1, card.roast);
+          const rankIdx = sortByBest && card.sold > 0 ? displayCards.filter(c => c.sold > 0).findIndex(c => c.cardKey === card.cardKey) : -1;
           return (
-            <button key={m.id} onClick={(e) => addToCart(m, e)} disabled={!available} className="menu-card">
+            <button key={card.cardKey} onClick={(e) => addToCart(m, e, card.roast)} disabled={!available} className="menu-card">
               <div className="flex items-center justify-between mb-2">
-                <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.3 }}>{m.name}</div>
+                <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.3 }}>{card.displayName}</div>
                 {!available && <AlertTriangle size={14} style={{ color: "var(--danger)" }} />}
               </div>
               <div className="flex items-center justify-between">
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{m.category}</span>
-                <span className="font-serif" style={{ fontSize: 18, fontWeight: 600, color: "var(--brown)" }}>฿{m.price}</span>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  {sortByBest && card.sold > 0 ? `ขาย ${card.sold} แก้ว/30 วัน` : m.category}
+                </span>
+                <span className="font-serif" style={{ fontSize: 18, fontWeight: 600, color: "var(--brown)" }}>฿{card.price}</span>
               </div>
+              {rankIdx >= 0 && rankIdx < 3 && (
+                <span style={{ position: "absolute", top: 6, right: 6, fontSize: 14 }}>{["🥇", "🥈", "🥉"][rankIdx]}</span>
+              )}
             </button>
           );
         })}
@@ -941,9 +1013,33 @@ function ReceiptModal({ receipt, shopInfo, onClose }) {
 // ========================================================================
 // AccountingView — บันทึกรายวัน (ขาย + รายจ่าย) + แก้ไข/ลบ + ลิงก์สต๊อก
 // ========================================================================
+// ===== กล่องรายละเอียดแบบกดเปิด/ปิด (ลดความรกของหน้าบัญชี) =====
+function Collapsible({ title, icon: Icon, children, defaultOpen = false, hint }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "transparent", border: "none", cursor: "pointer", color: "var(--text)", font: "inherit" }}
+      >
+        <span style={{ fontSize: 14, fontWeight: 500, display: "flex", alignItems: "center", gap: 8 }}>
+          {Icon && <Icon size={15} style={{ color: "var(--text-muted)" }} />}
+          {title}
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {hint && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{hint}</span>}
+          <ChevronDown size={16} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s", color: "var(--text-muted)" }} />
+        </span>
+      </button>
+      {open && <div style={{ padding: "0 16px 16px" }}>{children}</div>}
+    </div>
+  );
+}
+
 function AccountingView({ sales, setSales, expenses, setExpenses, stock, setStock, showToast }) {
   const todayISO = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(todayISO);
+  const [viewMode, setViewMode] = useState("day"); // day | month
   const [editingSale, setEditingSale] = useState(null);
   const [editingExp, setEditingExp] = useState(null);
   const [addingExp, setAddingExp] = useState(false);
@@ -1050,6 +1146,33 @@ function AccountingView({ sales, setSales, expenses, setExpenses, stock, setStoc
       expByCat, dailyBreakdown,
     };
   }, [monthlySales, monthlyExpenses]);
+
+  // ===== ตารางสรุปรายวันของเดือน (คลิกแถวเพื่อกระโดดไปดูบิลวันนั้น) =====
+  const dailyTable = useMemo(() => {
+    const map = {};
+    const ensure = (d) => (map[d] = map[d] || { date: d, bills: 0, revenue: 0, cogs: 0, exp: 0 });
+    monthlySales.forEach(s => {
+      const d = s.timestamp.slice(0, 10);
+      const row = ensure(d);
+      const isRev = !s.billType || s.billType === "normal";
+      row.bills++;
+      if (isRev) row.revenue += s.total || 0;
+      row.cogs += s.totalCost || 0;
+    });
+    monthlyExpenses.forEach(e => {
+      const d = (e.date || "").slice(0, 10);
+      if (!d) return;
+      ensure(d).exp += +e.amount || 0;
+    });
+    return Object.values(map)
+      .map(r => ({ ...r, net: r.revenue - r.cogs - r.exp }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [monthlySales, monthlyExpenses]);
+
+  const thaiDow = (iso) => {
+    const names = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
+    return names[new Date(iso + "T00:00:00").getDay()];
+  };
 
   const monthLabel = (() => {
     const [y, m] = monthKey.split("-");
@@ -1183,288 +1306,365 @@ function AccountingView({ sales, setSales, expenses, setExpenses, stock, setStoc
     d.setDate(d.getDate() + days);
     setDate(d.toISOString().slice(0, 10));
   };
+  const shiftMonth = (n) => {
+    const d = new Date(date + "T00:00:00");
+    d.setMonth(d.getMonth() + n);
+    setDate(d.toISOString().slice(0, 10));
+  };
+  // คลิกแถวในตารางรายวัน → ไปดูบิลของวันนั้น (สลับเป็นโหมดรายวัน)
+  const gotoDay = (d) => { setDate(d); setViewMode("day"); };
   const dayName = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัส", "ศุกร์", "เสาร์"][new Date(date + "T00:00:00").getDay()];
 
   return (
-    <div className="space-y-5">
-      {/* ===== Date header ===== */}
-      <div className="card p-4 flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <button className="btn-ghost" onClick={() => shiftDate(-1)}>‹ ก่อนหน้า</button>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ fontSize: 14 }} />
-          <button className="btn-ghost" onClick={() => shiftDate(1)} disabled={date >= todayISO}>วันถัดไป ›</button>
-          <button className="btn-ghost" onClick={() => setDate(todayISO)}>วันนี้</button>
-          <span style={{ marginLeft: 8, color: "var(--text-muted)", fontSize: 13 }}>วัน{dayName}</span>
-        </div>
-        <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-          {dailySales.length} บิล • {dailyExpenses.length} รายจ่าย
-        </div>
+    <div className="space-y-4">
+      {/* ===== สลับโหมด รายวัน / เดือนนี้ ===== */}
+      <div className="seg" style={{ width: "100%" }}>
+        <button className={viewMode === "day" ? "active" : ""} onClick={() => setViewMode("day")} style={{ flex: 1 }}>
+          <Calendar size={13} style={{ display: "inline", marginRight: 5, verticalAlign: "middle" }} />รายวัน
+        </button>
+        <button className={viewMode === "month" ? "active" : ""} onClick={() => setViewMode("month")} style={{ flex: 1 }}>
+          <BarChart3 size={13} style={{ display: "inline", marginRight: 5, verticalAlign: "middle" }} />เดือนนี้
+        </button>
       </div>
 
-      {/* ===== Summary KPIs (รายวัน) ===== */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPI label="เงินสด" value={`฿${summary.cash.toLocaleString()}`} icon={Banknote} color="success" />
-        <KPI label="เงินโอน" value={`฿${summary.transfer.toLocaleString()}`} icon={Smartphone} />
-        <KPI label="เงินในแอพ" value={`฿${summary.app.toLocaleString()}`} icon={Bike} />
-        <KPI label="กำไรสุทธิ" value={`฿${summary.netProfit.toLocaleString()}`} icon={TrendingUp} color={summary.netProfit >= 0 ? "success" : "muted"} />
-      </div>
-
-      {/* ===== Cash on hand / Net cash highlights ===== */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="card p-5" style={{ background: "linear-gradient(135deg, rgba(107,142,78,0.10), rgba(107,142,78,0.04))", borderLeft: "4px solid var(--success)" }}>
-          <div className="flex items-center justify-between mb-2">
-            <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>
-              <Banknote size={14} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
-              เงินสดในลิ้นชัก (วันนี้)
-            </span>
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>เพื่อนับเงิน</span>
+      {/* ===== แถบเลือกวัน/เดือน ===== */}
+      {viewMode === "day" ? (
+        <div className="card p-4 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button className="btn-ghost" onClick={() => shiftDate(-1)}>‹ ก่อนหน้า</button>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ fontSize: 14 }} />
+            <button className="btn-ghost" onClick={() => shiftDate(1)} disabled={date >= todayISO}>วันถัดไป ›</button>
+            <button className="btn-ghost" onClick={() => setDate(todayISO)}>วันนี้</button>
+            <span style={{ marginLeft: 8, color: "var(--text-muted)", fontSize: 13 }}>วัน{dayName}</span>
           </div>
-          <div className="font-serif" style={{ fontSize: 30, fontWeight: 700, color: summary.cashOnHand >= 0 ? "var(--success)" : "var(--danger)" }}>
-            ฿{summary.cashOnHand.toLocaleString()}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
-            ขายสด ฿{summary.cash.toLocaleString()} − จ่ายสด ฿{summary.expCash.toLocaleString()}
+          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            {dailySales.length} บิล • {dailyExpenses.length} รายจ่าย
           </div>
         </div>
-
-        <div className="card p-5" style={{ background: "linear-gradient(135deg, rgba(212,160,86,0.10), rgba(212,160,86,0.04))", borderLeft: "4px solid var(--accent)" }}>
-          <div className="flex items-center justify-between mb-2">
-            <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>
-              <TrendingUp size={14} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
-              เงินเหลือสุทธิทุกช่องทาง (วันนี้)
-            </span>
-            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>cash flow</span>
+      ) : (
+        <div className="card p-4 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button className="btn-ghost" onClick={() => shiftMonth(-1)}>‹ เดือนก่อน</button>
+            <span style={{ fontSize: 15, fontWeight: 600, minWidth: 130, textAlign: "center" }}>{monthLabel}</span>
+            <button className="btn-ghost" onClick={() => shiftMonth(1)} disabled={monthKey >= todayISO.slice(0, 7)}>เดือนถัดไป ›</button>
           </div>
-          <div className="font-serif" style={{ fontSize: 30, fontWeight: 700, color: summary.dailyNetCash >= 0 ? "var(--brown)" : "var(--danger)" }}>
-            ฿{summary.dailyNetCash.toLocaleString()}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
-            รายได้รวม ฿{summary.revenue.toLocaleString()} − รายจ่ายรวม ฿{summary.totalExp.toLocaleString()}
+          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            {monthSummary.normalCount} บิลขาย • {monthlyExpenses.length} รายจ่าย
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Status bar */}
-      <div className="card p-4" style={{ background: "var(--bg)" }}>
-        <div className="flex flex-wrap gap-3" style={{ fontSize: 13 }}>
-          <span><strong>รายได้รวม:</strong> ฿{summary.revenue.toLocaleString()}</span>
-          <span style={{ color: "var(--text-muted)" }}>|</span>
-          <span><strong>รายจ่าย:</strong> <span style={{ color: "var(--danger)" }}>฿{summary.totalExp.toLocaleString()}</span> <span style={{ color: "var(--text-muted)", fontSize: 11 }}>(สด ฿{summary.expCash.toLocaleString()} / โอน ฿{summary.expTransfer.toLocaleString()})</span></span>
-          <span style={{ color: "var(--text-muted)" }}>|</span>
-          <span><strong>ต้นทุนวัตถุดิบ:</strong> ฿{summary.totalCogs.toLocaleString()}</span>
-          <span style={{ color: "var(--text-muted)" }}>|</span>
-          <span><strong>กำไรขั้นต้น:</strong> ฿{(summary.revenue - summary.totalCogs).toLocaleString()}</span>
-          {summary.freeCount > 0 && <><span style={{ color: "var(--text-muted)" }}>|</span><span className="pill pill-free">🎁 ฟรี {summary.freeCount} บิล</span></>}
-          {summary.ownCount > 0 && <><span style={{ color: "var(--text-muted)" }}>|</span><span className="pill pill-own">💛 ใช้เอง {summary.ownCount} บิล</span></>}
-        </div>
-      </div>
-
-      {/* ===== Monthly Summary ===== */}
-      <div className="card p-5" style={{ borderTop: "3px solid var(--accent)" }}>
-        <div className="flex justify-between items-center flex-wrap gap-2 mb-3">
-          <h3 className="font-serif" style={{ fontSize: 20, margin: 0 }}>
-            <Calendar size={18} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
-            สรุปทั้งเดือน — {monthLabel}
-          </h3>
-          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            {monthSummary.normalCount} บิลขาย • {monthSummary.freeCount + monthSummary.ownCount > 0 ? `${monthSummary.freeCount + monthSummary.ownCount} บิลฟรี/ใช้เอง • ` : ""}{monthlyExpenses.length} รายการรายจ่าย
+      {/* ===== Hero: กำไรสุทธิ (ตัวเลขหลัก) ===== */}
+      {(() => {
+        const isDay = viewMode === "day";
+        const net = isDay ? summary.netProfit : monthSummary.netProfit;
+        const rev = isDay ? summary.revenue : monthSummary.revenue;
+        const cogs = isDay ? summary.totalCogs : monthSummary.totalCogs;
+        const exp = isDay ? summary.totalExp : monthSummary.totalExp;
+        const good = net >= 0;
+        const c = good ? "var(--success)" : "var(--danger)";
+        return (
+          <div className="card p-5" style={{ borderLeft: "4px solid " + c }}>
+            <div style={{ fontSize: 13, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+              {good ? <TrendingUp size={15} style={{ color: c }} /> : <AlertTriangle size={15} style={{ color: c }} />}
+              กำไรสุทธิ{isDay ? "วันนี้" : "เดือนนี้"}
+            </div>
+            <div className="font-serif" style={{ fontSize: 36, fontWeight: 700, color: c, lineHeight: 1.2, margin: "4px 0" }}>
+              {net < 0 ? "−" : ""}฿{Math.abs(net).toLocaleString()}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              รายได้ {rev.toLocaleString()} − ต้นทุน {cogs.toLocaleString()} − รายจ่าย {exp.toLocaleString()}
+            </div>
           </div>
-        </div>
+        );
+      })()}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-          <KPI label="รายได้รวมเดือนนี้" value={`฿${monthSummary.revenue.toLocaleString()}`} icon={TrendingUp} color="brown" />
+      {/* ===== KPI การ์ดเล็ก 4 ตัว ===== */}
+      {viewMode === "day" ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <KPI label="รายได้" value={`฿${summary.revenue.toLocaleString()}`} icon={TrendingUp} color="brown" />
+          <KPI label="รายจ่าย" value={`฿${summary.totalExp.toLocaleString()}`} icon={Wallet} color="muted" />
+          <KPI label="ต้นทุนวัตถุดิบ" value={`฿${summary.totalCogs.toLocaleString()}`} icon={Package} color="muted" />
+          <KPI label="เงินสดในลิ้นชัก" value={`฿${summary.cashOnHand.toLocaleString()}`} icon={Banknote} color={summary.cashOnHand >= 0 ? "success" : "muted"} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <KPI label="รายได้รวม" value={`฿${monthSummary.revenue.toLocaleString()}`} icon={TrendingUp} color="brown" />
           <KPI label="รายจ่ายรวม" value={`฿${monthSummary.totalExp.toLocaleString()}`} icon={Wallet} color="muted" />
+          <KPI label="ต้นทุนวัตถุดิบ" value={`฿${monthSummary.totalCogs.toLocaleString()}`} icon={Package} color="muted" />
           <KPI label="กำไรขั้นต้น" value={`฿${monthSummary.grossProfit.toLocaleString()}`} icon={Sparkles} color={monthSummary.grossProfit >= 0 ? "success" : "muted"} />
-          <KPI label="กำไรสุทธิ" value={`฿${monthSummary.netProfit.toLocaleString()}`} icon={Sparkles} color={monthSummary.netProfit >= 0 ? "success" : "muted"} />
         </div>
+      )}
 
-        {/* Revenue breakdown by payment method */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4" style={{ fontSize: 13 }}>
-          <div className="card p-4" style={{ background: "var(--bg)" }}>
-            <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 4 }}>
-              <Banknote size={12} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />เงินสด
+      {/* ===================== โหมดรายวัน ===================== */}
+      {viewMode === "day" && (
+        <>
+          <Collapsible title="เงินสด & เงินเหลือสุทธิวันนี้" icon={Banknote} hint={`ในลิ้นชัก ฿${summary.cashOnHand.toLocaleString()}`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3" style={{ paddingTop: 12 }}>
+              <div className="card p-4" style={{ borderLeft: "4px solid var(--success)" }}>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>เงินสดในลิ้นชัก (นับเงินปิดร้าน)</div>
+                <div className="font-serif" style={{ fontSize: 24, fontWeight: 700, color: summary.cashOnHand >= 0 ? "var(--success)" : "var(--danger)" }}>฿{summary.cashOnHand.toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>ขายสด ฿{summary.cash.toLocaleString()} − จ่ายสด ฿{summary.expCash.toLocaleString()}</div>
+              </div>
+              <div className="card p-4" style={{ borderLeft: "4px solid var(--accent)" }}>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>เงินเหลือสุทธิทุกช่องทาง (cash flow)</div>
+                <div className="font-serif" style={{ fontSize: 24, fontWeight: 700, color: summary.dailyNetCash >= 0 ? "var(--brown)" : "var(--danger)" }}>฿{summary.dailyNetCash.toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>รายได้รวม ฿{summary.revenue.toLocaleString()} − รายจ่ายรวม ฿{summary.totalExp.toLocaleString()}</div>
+              </div>
             </div>
-            <div className="font-serif" style={{ fontSize: 18, color: "var(--success)", fontWeight: 600 }}>฿{monthSummary.cash.toLocaleString()}</div>
-          </div>
-          <div className="card p-4" style={{ background: "var(--bg)" }}>
-            <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 4 }}>
-              <Smartphone size={12} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />เงินโอน
-            </div>
-            <div className="font-serif" style={{ fontSize: 18, color: "#a87028", fontWeight: 600 }}>฿{monthSummary.transfer.toLocaleString()}</div>
-          </div>
-          <div className="card p-4" style={{ background: "var(--bg)" }}>
-            <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 4 }}>
-              <Bike size={12} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />เงินในแอพ (เดลิเวอรี่)
-            </div>
-            <div className="font-serif" style={{ fontSize: 18, color: "#5e3abf", fontWeight: 600 }}>฿{monthSummary.app.toLocaleString()}</div>
-          </div>
-        </div>
+          </Collapsible>
 
-        {/* Expense breakdown by category */}
-        {Object.keys(monthSummary.expByCat).length > 0 && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>รายจ่ายแยกตามหมวด</div>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(monthSummary.expByCat).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => (
-                <div key={cat} style={{ background: "var(--bg)", padding: "6px 12px", borderRadius: 8, fontSize: 12, border: "1px solid var(--border)" }}>
-                  <span style={{ color: "var(--text-muted)" }}>{cat}:</span>
-                  <strong style={{ marginLeft: 6, color: "var(--danger)" }}>฿{amt.toLocaleString()}</strong>
-                </div>
-              ))}
+          <Collapsible title="รายได้แยกช่องทาง" icon={Smartphone} hint={`รวม ฿${summary.revenue.toLocaleString()}`}>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3" style={{ paddingTop: 12, fontSize: 13 }}>
+              <div className="card p-4" style={{ background: "var(--bg)" }}>
+                <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 4 }}><Banknote size={12} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />เงินสด</div>
+                <div className="font-serif" style={{ fontSize: 18, color: "var(--success)", fontWeight: 600 }}>฿{summary.cash.toLocaleString()}</div>
+              </div>
+              <div className="card p-4" style={{ background: "var(--bg)" }}>
+                <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 4 }}><Smartphone size={12} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />เงินโอน</div>
+                <div className="font-serif" style={{ fontSize: 18, color: "#a87028", fontWeight: 600 }}>฿{summary.transfer.toLocaleString()}</div>
+              </div>
+              <div className="card p-4" style={{ background: "var(--bg)" }}>
+                <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 4 }}><Bike size={12} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />เงินในแอพ</div>
+                <div className="font-serif" style={{ fontSize: 18, color: "#5e3abf", fontWeight: 600 }}>฿{summary.app.toLocaleString()}</div>
+              </div>
             </div>
-          </div>
-        )}
+            {(summary.freeCount > 0 || summary.ownCount > 0) && (
+              <div className="flex flex-wrap gap-2" style={{ marginTop: 10 }}>
+                {summary.freeCount > 0 && <span className="pill pill-free">🎁 ฟรี {summary.freeCount} บิล</span>}
+                {summary.ownCount > 0 && <span className="pill pill-own">💛 ใช้เอง {summary.ownCount} บิล</span>}
+              </div>
+            )}
+          </Collapsible>
 
-        {/* Daily revenue mini-chart */}
-        {monthSummary.dailyBreakdown.length > 0 && (() => {
-          const maxRev = Math.max(...monthSummary.dailyBreakdown.map(d => d.revenue), 1);
-          const [y, m] = monthKey.split("-");
-          const daysInMonth = new Date(+y, +m, 0).getDate();
-          const dayMap = Object.fromEntries(monthSummary.dailyBreakdown.map(d => [+d.date.slice(8), d.revenue]));
-          return (
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>รายได้รายวันในเดือนนี้</div>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 100 }}>
-                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
-                  const rev = dayMap[d] || 0;
-                  const isSelectedDay = d === +date.slice(8);
+          <div className="card p-5">
+            <h3 className="font-serif mb-3" style={{ fontSize: 18, margin: "0 0 12px 0" }}>
+              <ShoppingCart size={17} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
+              บิลขาย ({dailySales.length})
+            </h3>
+            {dailySales.length === 0 ? (
+              <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "16px 0" }}>วันนี้ยังไม่มีบิล</p>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>เวลา</th><th>รายการ</th><th>ประเภท</th><th>ช่องทาง</th><th style={{ textAlign: "right" }}>ยอด</th><th>โน้ต</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailySales.map(s => {
+                      const time = new Date(s.timestamp).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+                      const billType = s.billType || "normal";
+                      const itemSummary = s.items.map(it => `${it.name}×${it.qty}`).join(", ");
+                      return (
+                        <tr key={s.id}>
+                          <td style={{ whiteSpace: "nowrap", fontSize: 12, color: "var(--text-muted)" }}>{time}</td>
+                          <td style={{ fontSize: 13 }} title={itemSummary}>
+                            {itemSummary.length > 50 ? itemSummary.slice(0, 50) + "…" : itemSummary}
+                          </td>
+                          <td>
+                            {billType === "free" && <span className="pill pill-free">ฟรี</span>}
+                            {billType === "own" && <span className="pill pill-own">ใช้เอง</span>}
+                            {billType === "normal" && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>ขายปกติ</span>}
+                          </td>
+                          <td>
+                            {s.paymentMethod === "cash" && <span className="pill pill-cash"><Banknote size={10} />สด</span>}
+                            {s.paymentMethod === "transfer" && <span className="pill pill-transfer"><Smartphone size={10} />โอน</span>}
+                            {s.paymentMethod === "app" && <span className="pill pill-app"><Bike size={10} />แอพ</span>}
+                            {!s.paymentMethod && <span style={{ fontSize: 11, color: "var(--text-muted)" }}>—</span>}
+                          </td>
+                          <td style={{ textAlign: "right", fontWeight: 600, color: billType === "normal" ? "var(--brown)" : "var(--text-muted)" }}>
+                            ฿{s.total}
+                          </td>
+                          <td style={{ fontSize: 11, color: "var(--text-muted)", maxWidth: 140 }}>
+                            {s.note || "—"}
+                          </td>
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            <button onClick={() => setEditingSale(JSON.parse(JSON.stringify(s)))} className="btn-ghost" style={{ padding: "4px 8px", fontSize: 12 }}>
+                              <Edit3 size={11} />
+                            </button>
+                            <button onClick={() => deleteSale(s)} className="btn-ghost" style={{ padding: "4px 8px", fontSize: 12, marginLeft: 4, color: "var(--danger)" }}>
+                              <Trash2 size={11} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="card p-5">
+            <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+              <h3 className="font-serif" style={{ fontSize: 18, margin: 0 }}>
+                <Wallet size={17} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
+                รายจ่าย ({dailyExpenses.length})
+              </h3>
+              <button onClick={() => setAddingExp(true)} className="btn-primary">
+                <Plus size={14} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
+                เพิ่มรายจ่าย
+              </button>
+            </div>
+            {dailyExpenses.length === 0 ? (
+              <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "16px 0" }}>วันนี้ยังไม่มีรายจ่าย</p>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>หมวด</th><th>รายละเอียด</th><th>ลิงก์สต๊อก</th><th>ช่องทาง</th><th style={{ textAlign: "right" }}>จำนวนเงิน</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyExpenses.map(e => {
+                      const linkedItem = e.stockItemId ? stock.find(s => s.id === e.stockItemId) : null;
+                      return (
+                        <tr key={e.id}>
+                          <td style={{ fontSize: 13 }}>{e.category}</td>
+                          <td style={{ fontSize: 13, fontWeight: 500 }}>{e.description}</td>
+                          <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                            {linkedItem ? `${linkedItem.name} +${e.stockQty} ${linkedItem.unit}` : "—"}
+                          </td>
+                          <td>
+                            {e.paymentMethod === "transfer"
+                              ? <span className="pill pill-transfer"><Smartphone size={10} />โอน</span>
+                              : <span className="pill pill-cash"><Banknote size={10} />สด</span>}
+                          </td>
+                          <td style={{ textAlign: "right", fontWeight: 600, color: "var(--danger)" }}>−฿{(+e.amount).toLocaleString()}</td>
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            <button onClick={() => setEditingExp({ ...e })} className="btn-ghost" style={{ padding: "4px 8px", fontSize: 12 }}>
+                              <Edit3 size={11} />
+                            </button>
+                            <button onClick={() => deleteExp(e)} className="btn-ghost" style={{ padding: "4px 8px", fontSize: 12, marginLeft: 4, color: "var(--danger)" }}>
+                              <Trash2 size={11} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ===================== โหมดเดือน ===================== */}
+      {viewMode === "month" && (
+        <>
+          <div className="card p-5">
+            <h3 className="font-serif" style={{ fontSize: 18, margin: "0 0 2px 0" }}>
+              <Calendar size={17} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
+              สรุปรายวัน
+            </h3>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0" }}>แตะแถวเพื่อดูบิลของวันนั้น</p>
+            {dailyTable.length === 0 ? (
+              <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "16px 0" }}>เดือนนี้ยังไม่มีข้อมูล</p>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>วันที่</th>
+                      <th style={{ textAlign: "center" }}>บิล</th>
+                      <th style={{ textAlign: "right" }}>รายได้</th>
+                      <th style={{ textAlign: "right" }}>รายจ่าย</th>
+                      <th style={{ textAlign: "right" }}>สุทธิ</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyTable.map(r => (
+                      <tr key={r.date} onClick={() => gotoDay(r.date)} style={{ cursor: "pointer" }}>
+                        <td style={{ whiteSpace: "nowrap", color: "var(--brown)", fontWeight: 500 }}>{+r.date.slice(8)} {thaiDow(r.date)} ›</td>
+                        <td style={{ textAlign: "center", fontSize: 12, color: "var(--text-muted)" }}>{r.bills}</td>
+                        <td style={{ textAlign: "right", color: "var(--brown)" }}>฿{r.revenue.toLocaleString()}</td>
+                        <td style={{ textAlign: "right", color: "var(--danger)" }}>{r.exp > 0 ? `−฿${r.exp.toLocaleString()}` : "—"}</td>
+                        <td style={{ textAlign: "right", fontWeight: 600, color: r.net >= 0 ? "var(--success)" : "var(--danger)" }}>{r.net < 0 ? "−" : ""}฿{Math.abs(r.net).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ borderTop: "2px solid var(--border)", fontWeight: 700 }}>
+                      <td>รวมเดือน</td>
+                      <td style={{ textAlign: "center", fontSize: 12 }}>{monthSummary.normalCount}</td>
+                      <td style={{ textAlign: "right", color: "var(--brown)" }}>฿{monthSummary.revenue.toLocaleString()}</td>
+                      <td style={{ textAlign: "right", color: "var(--danger)" }}>−฿{monthSummary.totalExp.toLocaleString()}</td>
+                      <td style={{ textAlign: "right", color: monthSummary.netProfit >= 0 ? "var(--success)" : "var(--danger)" }}>{monthSummary.netProfit < 0 ? "−" : ""}฿{Math.abs(monthSummary.netProfit).toLocaleString()}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <Collapsible title="รายได้แยกช่องทาง" icon={Smartphone} hint={`รวม ฿${monthSummary.revenue.toLocaleString()}`}>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3" style={{ paddingTop: 12, fontSize: 13 }}>
+              <div className="card p-4" style={{ background: "var(--bg)" }}>
+                <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 4 }}><Banknote size={12} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />เงินสด</div>
+                <div className="font-serif" style={{ fontSize: 18, color: "var(--success)", fontWeight: 600 }}>฿{monthSummary.cash.toLocaleString()}</div>
+              </div>
+              <div className="card p-4" style={{ background: "var(--bg)" }}>
+                <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 4 }}><Smartphone size={12} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />เงินโอน</div>
+                <div className="font-serif" style={{ fontSize: 18, color: "#a87028", fontWeight: 600 }}>฿{monthSummary.transfer.toLocaleString()}</div>
+              </div>
+              <div className="card p-4" style={{ background: "var(--bg)" }}>
+                <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 4 }}><Bike size={12} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />เงินในแอพ</div>
+                <div className="font-serif" style={{ fontSize: 18, color: "#5e3abf", fontWeight: 600 }}>฿{monthSummary.app.toLocaleString()}</div>
+              </div>
+            </div>
+          </Collapsible>
+
+          {Object.keys(monthSummary.expByCat).length > 0 && (
+            <Collapsible title="รายจ่ายแยกหมวด" icon={Wallet} hint={`รวม ฿${monthSummary.totalExp.toLocaleString()}`} defaultOpen>
+              <div className="flex flex-col gap-2" style={{ paddingTop: 12 }}>
+                {Object.entries(monthSummary.expByCat).sort((a, b) => b[1] - a[1]).map(([cat, amt]) => {
+                  const pct = monthSummary.totalExp > 0 ? (amt / monthSummary.totalExp * 100) : 0;
                   return (
-                    <div key={d} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                      <div
-                        title={`วันที่ ${d}: ฿${rev.toLocaleString()}`}
-                        style={{
-                          width: "85%",
-                          background: isSelectedDay ? "var(--brown)" : (rev > 0 ? "var(--accent)" : "var(--border)"),
-                          height: `${(rev / maxRev) * 100}%`,
-                          borderRadius: "2px 2px 0 0",
-                          minHeight: 2,
-                        }}
-                      />
-                      <div style={{ fontSize: 8, marginTop: 2, color: isSelectedDay ? "var(--brown)" : "var(--text-muted)", fontWeight: isSelectedDay ? 600 : 400 }}>{d}</div>
+                    <div key={cat}>
+                      <div className="flex justify-between" style={{ fontSize: 13, marginBottom: 3 }}>
+                        <span>{cat}</span>
+                        <strong style={{ color: "var(--danger)" }}>฿{amt.toLocaleString()} <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: 11 }}>({pct.toFixed(0)}%)</span></strong>
+                      </div>
+                      <div style={{ height: 6, background: "var(--bg)", borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{ width: `${pct}%`, height: "100%", background: "var(--danger)", opacity: 0.55 }} />
+                      </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
-          );
-        })()}
-      </div>
+            </Collapsible>
+          )}
 
-      {/* ===== Daily Sales List ===== */}
-      <div className="card p-5">
-        <h3 className="font-serif mb-3" style={{ fontSize: 20, margin: "0 0 12px 0" }}>
-          <ShoppingCart size={18} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
-          บิลขายของวันนี้ ({dailySales.length})
-        </h3>
-        {dailySales.length === 0 ? (
-          <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "16px 0" }}>วันนี้ยังไม่มีบิล</p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>เวลา</th><th>รายการ</th><th>ประเภท</th><th>ช่องทาง</th><th style={{ textAlign: "right" }}>ยอด</th><th>โน้ต</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {dailySales.map(s => {
-                  const time = new Date(s.timestamp).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
-                  const billType = s.billType || "normal";
-                  const itemSummary = s.items.map(it => `${it.name}×${it.qty}`).join(", ");
-                  return (
-                    <tr key={s.id}>
-                      <td style={{ whiteSpace: "nowrap", fontSize: 12, color: "var(--text-muted)" }}>{time}</td>
-                      <td style={{ fontSize: 13 }} title={itemSummary}>
-                        {itemSummary.length > 50 ? itemSummary.slice(0, 50) + "…" : itemSummary}
-                      </td>
-                      <td>
-                        {billType === "free" && <span className="pill pill-free">ฟรี</span>}
-                        {billType === "own" && <span className="pill pill-own">ใช้เอง</span>}
-                        {billType === "normal" && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>ขายปกติ</span>}
-                      </td>
-                      <td>
-                        {s.paymentMethod === "cash" && <span className="pill pill-cash"><Banknote size={10} />สด</span>}
-                        {s.paymentMethod === "transfer" && <span className="pill pill-transfer"><Smartphone size={10} />โอน</span>}
-                        {s.paymentMethod === "app" && <span className="pill pill-app"><Bike size={10} />แอพ</span>}
-                        {!s.paymentMethod && <span style={{ fontSize: 11, color: "var(--text-muted)" }}>—</span>}
-                      </td>
-                      <td style={{ textAlign: "right", fontWeight: 600, color: billType === "normal" ? "var(--brown)" : "var(--text-muted)" }}>
-                        ฿{s.total}
-                      </td>
-                      <td style={{ fontSize: 11, color: "var(--text-muted)", maxWidth: 140 }}>
-                        {s.note || "—"}
-                      </td>
-                      <td style={{ whiteSpace: "nowrap" }}>
-                        <button onClick={() => setEditingSale(JSON.parse(JSON.stringify(s)))} className="btn-ghost" style={{ padding: "4px 8px", fontSize: 12 }}>
-                          <Edit3 size={11} />
-                        </button>
-                        <button onClick={() => deleteSale(s)} className="btn-ghost" style={{ padding: "4px 8px", fontSize: 12, marginLeft: 4, color: "var(--danger)" }}>
-                          <Trash2 size={11} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* ===== Daily Expenses List ===== */}
-      <div className="card p-5">
-        <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
-          <h3 className="font-serif" style={{ fontSize: 20, margin: 0 }}>
-            <Wallet size={18} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />
-            รายจ่ายของวันนี้ ({dailyExpenses.length})
-          </h3>
-          <button onClick={() => setAddingExp(true)} className="btn-primary">
-            <Plus size={14} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
-            เพิ่มรายจ่าย
-          </button>
-        </div>
-        {dailyExpenses.length === 0 ? (
-          <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "16px 0" }}>วันนี้ยังไม่มีรายจ่าย</p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>หมวด</th><th>รายละเอียด</th><th>ลิงก์สต๊อก</th><th>ช่องทาง</th><th style={{ textAlign: "right" }}>จำนวนเงิน</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {dailyExpenses.map(e => {
-                  const linkedItem = e.stockItemId ? stock.find(s => s.id === e.stockItemId) : null;
-                  return (
-                    <tr key={e.id}>
-                      <td style={{ fontSize: 13 }}>{e.category}</td>
-                      <td style={{ fontSize: 13, fontWeight: 500 }}>{e.description}</td>
-                      <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                        {linkedItem ? `${linkedItem.name} +${e.stockQty} ${linkedItem.unit}` : "—"}
-                      </td>
-                      <td>
-                        {e.paymentMethod === "transfer"
-                          ? <span className="pill pill-transfer"><Smartphone size={10} />โอน</span>
-                          : <span className="pill pill-cash"><Banknote size={10} />สด</span>}
-                      </td>
-                      <td style={{ textAlign: "right", fontWeight: 600, color: "var(--danger)" }}>−฿{(+e.amount).toLocaleString()}</td>
-                      <td style={{ whiteSpace: "nowrap" }}>
-                        <button onClick={() => setEditingExp({ ...e })} className="btn-ghost" style={{ padding: "4px 8px", fontSize: 12 }}>
-                          <Edit3 size={11} />
-                        </button>
-                        <button onClick={() => deleteExp(e)} className="btn-ghost" style={{ padding: "4px 8px", fontSize: 12, marginLeft: 4, color: "var(--danger)" }}>
-                          <Trash2 size={11} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+          {monthSummary.dailyBreakdown.length > 0 && (
+            <Collapsible title="กราฟรายได้รายวัน" icon={BarChart3}>
+              {(() => {
+                const maxRev = Math.max(...monthSummary.dailyBreakdown.map(d => d.revenue), 1);
+                const [y, m] = monthKey.split("-");
+                const daysInMonth = new Date(+y, +m, 0).getDate();
+                const dayMap = Object.fromEntries(monthSummary.dailyBreakdown.map(d => [+d.date.slice(8), d.revenue]));
+                return (
+                  <div style={{ paddingTop: 12 }}>
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 100 }}>
+                      {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => {
+                        const rev = dayMap[d] || 0;
+                        const isSelectedDay = d === +date.slice(8);
+                        return (
+                          <div key={d} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                            <div title={`วันที่ ${d}: ฿${rev.toLocaleString()}`} style={{ width: "85%", background: isSelectedDay ? "var(--brown)" : (rev > 0 ? "var(--accent)" : "var(--border)"), height: `${(rev / maxRev) * 100}%`, borderRadius: "2px 2px 0 0", minHeight: 2 }} />
+                            <div style={{ fontSize: 8, marginTop: 2, color: isSelectedDay ? "var(--brown)" : "var(--text-muted)", fontWeight: isSelectedDay ? 600 : 400 }}>{d}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </Collapsible>
+          )}
+        </>
+      )}
 
       {/* ===== Add Expense Modal ===== */}
       {addingExp && (
