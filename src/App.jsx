@@ -1080,7 +1080,9 @@ function AccountingView({ sales, setSales, expenses, setExpenses, stock, setStoc
       else expCash += amt;
     });
     const totalExp = expCash + expTransfer;
-    const netProfit = revenue - totalCogs - totalExp;
+    // แนวทาง A (เงินสด): กำไรสุทธิ = รายได้ − รายจ่ายทั้งหมด
+    // totalExp รวมค่าซื้อวัตถุดิบไว้แล้ว จึงไม่หัก totalCogs ซ้ำ (กัน double-count)
+    const netProfit = revenue - totalExp;
     // เงินสดสุทธิในลิ้นชักวันนี้ = ขายเงินสด − จ่ายเงินสด
     const cashOnHand = cash - expCash;
     // เงินเหลือสุทธิวันนี้ (cash flow รวมทุกช่องทาง) = รายได้ทั้งหมด − รายจ่ายทั้งหมด
@@ -1138,7 +1140,9 @@ function AccountingView({ sales, setSales, expenses, setExpenses, stock, setStoc
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([d, v]) => ({ date: d, revenue: v }));
     const grossProfit = revenue - totalCogs;
-    const netProfit = grossProfit - totalExp;
+    // แนวทาง A (เงินสด): กำไรสุทธิ = รายได้ − รายจ่ายทั้งหมด
+    // totalExp รวมค่าซื้อวัตถุดิบไว้แล้ว จึงไม่หัก totalCogs ซ้ำ (กัน double-count)
+    const netProfit = revenue - totalExp;
     return {
       cash, transfer, app, revenue,
       freeCount, ownCount, normalCount,
@@ -1165,7 +1169,7 @@ function AccountingView({ sales, setSales, expenses, setExpenses, stock, setStoc
       ensure(d).exp += +e.amount || 0;
     });
     return Object.values(map)
-      .map(r => ({ ...r, net: r.revenue - r.cogs - r.exp }))
+      .map(r => ({ ...r, net: r.revenue - r.exp }))
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [monthlySales, monthlyExpenses]);
 
@@ -1359,7 +1363,6 @@ function AccountingView({ sales, setSales, expenses, setExpenses, stock, setStoc
         const isDay = viewMode === "day";
         const net = isDay ? summary.netProfit : monthSummary.netProfit;
         const rev = isDay ? summary.revenue : monthSummary.revenue;
-        const cogs = isDay ? summary.totalCogs : monthSummary.totalCogs;
         const exp = isDay ? summary.totalExp : monthSummary.totalExp;
         const good = net >= 0;
         const c = good ? "var(--success)" : "var(--danger)";
@@ -1373,7 +1376,7 @@ function AccountingView({ sales, setSales, expenses, setExpenses, stock, setStoc
               {net < 0 ? "−" : ""}฿{Math.abs(net).toLocaleString()}
             </div>
             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              รายได้ {rev.toLocaleString()} − ต้นทุน {cogs.toLocaleString()} − รายจ่าย {exp.toLocaleString()}
+              รายได้ {rev.toLocaleString()} − รายจ่ายรวม {exp.toLocaleString()}
             </div>
           </div>
         );
